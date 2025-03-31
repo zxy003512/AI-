@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 五子棋对战 v1</title> {/* 版本修改 */}
+    <style>
+        /* --- Global Styles & Resets --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+             scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align top */
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            color: #333;
+            padding: 15px;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+        }
+
+        /* --- Layout Containers --- */
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 1200px; /* Limit max width */
+        }
+
+        .main-content {
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .board-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* 为标签添加 */
+            --label-size: 25px; /* 标签区域的大小 */
+            --board-size: 15; /* 棋盘大小的 CSS 变量 */
+            /* 响应式单元格大小 - 应允许在大多数屏幕上完整显示棋盘 */
+            --cell-size: clamp(20px, 4.5vmin, 35px);
+            --board-dimension: calc(var(--board-size) * var(--cell-size));
+            /* Padding provides space for labels INSIDE the area */
+            /* padding: var(--label-size) 0 0 var(--label-size); */
+            /* Let wrapper handle spacing */
+        }
+
+        .board-wrapper {
+            display: grid;
+            /* 标签 + 棋盘的模板 */
+            grid-template-columns: var(--label-size) var(--board-dimension);
+            grid-template-rows: var(--label-size) var(--board-dimension);
+            align-items: stretch; /* 使标签伸展 */
+            justify-items: stretch; /* 使标签伸展 */
+            /* Add some margin around the whole wrapper if needed */
+            /* margin-bottom: 15px; */
+        }
+
+        .board-labels-top {
+            grid-column: 2 / 3; /* 棋盘上方 */
+            grid-row: 1 / 2;
+            display: flex;
+            /* 使用 space-around 在单元格空间内居中 */
+            justify-content: space-around;
+            align-items: center;
+            font-size: calc(var(--cell-size) * 0.4);
+            color: #555;
+            /* Align text with grid centers */
+            /* padding-left: calc(var(--cell-size) / 2); */
+            /* padding-right: calc(var(--cell-size) / 2); */
+        }
+        .board-labels-left {
+            grid-column: 1 / 2; /* 棋盘左侧 */
+            grid-row: 2 / 3;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+            font-size: calc(var(--cell-size) * 0.4);
+            color: #555;
+             /* Align text with grid centers */
+            /* padding-top: calc(var(--cell-size) / 2); */
+            /* padding-bottom: calc(var(--cell-size) / 2); */
+        }
+        /* 确保标签正确占据空间 */
+        .board-labels-top span, .board-labels-left span {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: var(--cell-size); /* 匹配单元格宽度 */
+            height: var(--cell-size); /* 匹配单元格高度 */
+        }
+
+        #game-board {
+            grid-column: 2 / 3; /* 棋盘本身 */
+            grid-row: 2 / 3;
+            width: var(--board-dimension);
+            height: var(--board-dimension);
+            display: grid;
+            grid-template-columns: repeat(var(--board-size), 1fr);
+            grid-template-rows: repeat(var(--board-size), 1fr);
+            border: 2px solid #8B4513; /* 木质边框 */
+            background-color: #F5DEB3; /* 木质背景 */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            position: relative; /* 用于伪元素 */
+            overflow: hidden; /* 确保棋子在视觉上不溢出 */
+        }
+
+        /* 使用伪元素绘制网格线 */
+         #game-board::before {
+            content: '';
+            position: absolute;
+            /* 从第一个单元格的中心开始绘制线条 */
+            top: calc(var(--cell-size) / 2);
+            left: calc(var(--cell-size) / 2);
+            /* 线条应覆盖内部网格交叉点 */
+            width: calc(var(--board-dimension) - var(--cell-size));
+            height: calc(var(--board-dimension) - var(--cell-size));
+            background-image:
+                linear-gradient(to right, #aaa 1px, transparent 1px),
+                linear-gradient(to bottom, #aaa 1px, transparent 1px);
+            background-size: var(--cell-size) var(--cell-size);
+            z-index: 0; /* 在单元格后面 */
+        }
+
+        .cell {
+            position: relative; /* 用于棋子定位 */
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1; /* 在网格线之上 */
+        }
+
+        /* 空单元格的悬停效果 */
+        .cell:not(.occupied):hover::after {
+            content: '';
+            position: absolute;
+            width: 70%;
+            height: 70%;
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.1);
+            pointer-events: none; /* 允许点击穿透 */
+        }
+
+        /* 已占用的单元格不需要悬停效果 */
+        /* .cell.occupied:hover::after { display: none; } */
+
+        .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            position: absolute; /* 在单元格内居中 */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transform: scale(0); /* 动画的初始状态 */
+            animation: placePiece 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            z-index: 2; /* 棋子在网格线和悬停效果之上 */
+        }
+
+        .piece.black { background: radial-gradient(circle at 30% 30%, #555, #000); }
+        .piece.white { background: radial-gradient(circle at 70% 70%, #fff, #ccc); }
+
+        @keyframes placePiece {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        /* --- 控制和设置面板 --- */
+        .controls-and-logs {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex: 1; /* 占据剩余空间 */
+            min-width: 320px; /* 控制面板的最小宽度 */
+            max-width: 500px; /* 控制面板的最大宽度 */
+        }
+
+        .panel {
+            background-color: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px; /* 面板之间的边距 */
+        }
+
+        .panel h3 {
+            margin: -15px -20px 15px -20px; /* 扩展标题背景 */
+            padding: 10px 20px;
+            background-color: #e9ecef;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            border-bottom: 1px solid #dee2e6;
+            color: #495057;
+            font-size: 1.1em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+         .panel h3 button.toggle-btn {
+             background: none;
+             border: none;
+             font-size: 1em;
+             cursor: pointer;
+             padding: 0 5px;
+             color: #6c757d;
+         }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="password"],
+        .form-group input[type="number"],
+        .form-group select,
+        .form-group textarea { /* 添加了 textarea */
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.95em;
+            transition: border-color 0.2s ease;
+        }
+        .form-group textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+             border-color: #1a73e8;
+             outline: none;
+        }
+        .form-group input[type="checkbox"] {
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .form-group small {
+            font-size: 0.8em;
+            color: #6c757d;
+            display: block;
+            margin-top: 3px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap; /* 需要时换行按钮 */
+        }
+        /* 日志控制的特定组 */
+        .log-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+            background-color: #1a73e8;
+            color: white;
+        }
+        button:hover {
+            background-color: #155ab6;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        }
+        button:active { background-color: #124a9c; }
+        button#new-game-btn { background-color: #28a745; }
+        button#new-game-btn:hover { background-color: #218838; }
+        button#ai-first-btn { background-color: #17a2b8; } /* AI 先行的不同颜色 */
+        button#ai-first-btn:hover { background-color: #138496; }
+        button#ai-retry-btn { background-color: #ffc107; color: #333; } /* 警告色 */
+        button#ai-retry-btn:hover { background-color: #e0a800; }
+        button.secondary-btn { background-color: #6c757d; }
+        button.secondary-btn:hover { background-color: #5a6268; }
+        button.danger-btn { background-color: #dc3545; }
+        button.danger-btn:hover { background-color: #c82333; }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.7;
+        }
+
+        /* --- 状态和日志区域 --- */
+        #status-area {
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 1.1em;
+            min-height: 1.5em; /* 防止布局抖动 */
+            color: #0056b3;
+        }
+
+        #log-area {
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 10px;
+            height: 250px; /* 增加高度 */
+            overflow-y: auto;
+            font-size: 0.85em;
+            line-height: 1.5;
+            color: #444;
+        }
+        #log-area p { margin-bottom: 5px; word-wrap: break-word; }
+        #log-area .log-info { color: #333; }
+        #log-area .log-success { color: #28a745; }
+        #log-area .log-error { color: #dc3545; font-weight: bold; }
+        #log-area .log-warning { color: #ffc107; }
+        #log-area .log-api { color: #007bff; }
+        #log-area .log-ai-resp {
+            color: #6c757d;
+            font-style: italic;
+            white-space: pre-wrap; /* 保留空白符 */
+            border-left: 3px solid #ccc;
+            padding-left: 8px;
+            margin-top: 2px;
+            display: none; /* 默认隐藏 */
+        }
+        #log-area.show-raw-ai .log-ai-resp { display: block; } /* 添加类时显示 */
+
+        /* --- 隐藏的 Canvas --- */
+        #board-canvas { display: none; }
+
+        /* --- 响应式调整 --- */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .main-content { flex-direction: column; align-items: center; }
+            .controls-and-logs { width: 100%; max-width: none; }
+            /* 在较小屏幕上更积极地调整单元格/标签大小 */
+            .board-area { --cell-size: clamp(18px, 5.5vw, 28px); --label-size: 18px; }
+            .board-labels-top, .board-labels-left { font-size: calc(var(--cell-size) * 0.5); }
+            .panel h3 { font-size: 1em; }
+            button { font-size: 0.9em; padding: 8px 12px;}
+            #log-area { height: 200px; }
+            .log-controls { flex-direction: column; align-items: flex-start; gap: 5px;} /* 堆叠日志控件 */
+        }
+         @media (max-width: 480px) {
+             .board-area { --cell-size: clamp(16px, 5vw, 22px); --label-size: 15px; }
+             .board-labels-top, .board-labels-left { font-size: calc(var(--cell-size) * 0.55); }
+         }
+
+        /* --- 设置部分 --- */
+        .settings-section {
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #fdfdfd;
+        }
+        .settings-section h4 {
+            margin-bottom: 10px;
+            font-size: 1em;
+            color: #333;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>AI 五子棋对战 v1</h1> {/* 版本修改 */}
+
+    <div class="game-container">
+        <div id="status-area">请开始游戏</div>
+
+        <div class="main-content">
+            <div class="board-area">
+                <!-- 棋盘和标签的包装器 -->
+                <div class="board-wrapper">
+                    <div class="board-labels-top"></div> <!-- 列标签 (A-O) -->
+                    <div class="board-labels-left"></div> <!-- 行标签 (0-14) -->
+                    <div id="game-board"></div>         <!-- 实际的游戏棋盘 -->
+                </div>
+                <canvas id="board-canvas"></canvas> <!-- 隐藏的 canvas -->
+            </div>
+
+            <div class="controls-and-logs">
+
+                <!-- API 配置面板 -->
+                <div class="panel">
+                    <h3>
+                        <span>⚙️ API 配置管理</span>
+                        <button class="toggle-btn" id="toggle-api-config" title="Toggle Panel">(-)</button>
+                    </h3>
+                    <div id="api-config-content">
+                        <div class="form-group">
+                            <label for="api-config-select">选择配置:</label>
+                            <select id="api-config-select"></select>
+                        </div>
+
+                        <div class="settings-section">
+                             <h4>编辑/添加配置</h4>
+                             <div class="form-group">
+                                 <label for="api-config-name">配置名称:</label>
+                                 <input type="text" id="api-config-name" placeholder="例如: My Gemini Config">
+                             </div>
+                             <div class="form-group">
+                                 <label for="api-url">API 地址:</label>
+                                 <input type="text" id="api-url" placeholder="例如: https://api.openai.com/v1/chat/completions">
+                                 <small>输入您的 API 端点 URL</small> {/* 提示用户输入 */}
+                             </div>
+                             <div class="form-group">
+                                 <label for="api-key">API Key:</label>
+                                 <input type="password" id="api-key" placeholder="在此输入您的 API Key"> {/* 提示用户输入 */}
+                             </div>
+                             <div class="form-group">
+                                 <label for="api-models-list">可用模型 (逗号分隔):</label>
+                                 <textarea id="api-models-list" rows="2" placeholder="例如: gpt-4o, gemini-1.5-pro-latest"></textarea> {/* 提示用户输入 */}
+                                 <small>在此处输入此配置可用的模型名称</small>
+                             </div>
+                             <div class="button-group">
+                                 <button id="save-api-config-btn" class="secondary-btn">保存对选中配置的更改</button>
+                                 <button id="add-api-config-btn">添加为新配置</button>
+                                 <button id="delete-api-config-btn" class="danger-btn">删除选中配置</button>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 游戏设置面板 -->
+                <div class="panel">
+                     <h3>
+                         <span>🎮 游戏设置</span>
+                         <button class="toggle-btn" id="toggle-game-settings" title="Toggle Panel">(-)</button>
+                    </h3>
+                    <div id="game-settings-content">
+                        <div class="form-group">
+                            <label for="api-model">选择模型 (来自当前API配置):</label>
+                            <select id="api-model">
+                                <!-- 选项由 JS 填充 -->
+                            </select>
+                        </div>
+                         <div class="form-group">
+                            <label for="use-image">
+                                <input type="checkbox" id="use-image"> 使用图像模式 (需要模型支持Vision)
+                            </label>
+                             <small>图像模式会包含棋盘坐标标记。</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="temperature">Temperature:</label>
+                            <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.1"> {/* 默认值修改 */}
+                        </div>
+                        <div class="form-group">
+                            <label for="max-tokens">Max Tokens:</label>
+                            <input type="number" id="max-tokens" min="10" max="60000" step="10" value="60000"> {/* 默认值和 max 修改 */}
+                        </div>
+                         <div class="form-group">
+                            <label for="move-wrapper">AI落子标记 (用 [row],[col] 代表行列):</label>
+                            <input type="text" id="move-wrapper" value="AI_MOVE:[row],[col]">
+                            <small>例如: `AI_MOVE:[row],[col]` 或 `落子:[row],[col]`。坐标从0开始。</small>
+                        </div>
+                        <div class="button-group">
+                            <button id="save-game-settings-btn">保存游戏设置</button>
+                             <small style="align-self: center;">(API配置在上方单独保存)</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 游戏控制 -->
+                 <div class="panel">
+                     <h3>🕹️ 游戏控制</h3>
+                     <div class="button-group">
+                         <button id="new-game-btn">新游戏 (玩家先手)</button>
+                         <button id="ai-first-btn">新游戏 (AI 先手)</button>
+                         <button id="ai-retry-btn" disabled>AI 重试</button> <!-- 初始禁用 -->
+                     </div>
+                 </div>
+
+                <!-- 日志区域 -->
+                <div class="panel">
+                    <h3>
+                        <span>📊 日志 & AI 回复</span>
+                         <button class="toggle-btn" id="toggle-log-panel" title="Toggle Panel">(-)</button>
+                    </h3>
+                     <div id="log-panel-content">
+                         <div class="log-controls"> <!-- 日志控制的新容器 -->
+                             <div class="form-group" style="margin-bottom: 0;">
+                                 <label for="show-raw-ai-response" style="font-weight: normal; font-size: 0.9em;">
+                                     <input type="checkbox" id="show-raw-ai-response"> 显示 AI 原始回复
+                                 </label>
+                             </div>
+                             <button id="clear-log-btn" class="secondary-btn" style="padding: 5px 10px; font-size: 0.85em;">清除日志</button>
+                         </div>
+                        <div id="log-area">
+                            <p class="log-info">欢迎来到 AI 五子棋 v1!</p> {/* 版本修改 */}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM 元素 ---
+        const boardElement = document.getElementById('game-board');
+        const boardLabelsTop = document.querySelector('.board-labels-top'); // 添加 - 顶部标签容器
+        const boardLabelsLeft = document.querySelector('.board-labels-left'); // 添加 - 左侧标签容器
+        const statusArea = document.getElementById('status-area');
+        const logArea = document.getElementById('log-area');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const aiFirstBtn = document.getElementById('ai-first-btn');
+        const aiRetryBtn = document.getElementById('ai-retry-btn'); // 添加 - AI 重试按钮
+        const boardCanvas = document.getElementById('board-canvas');
+        const ctx = boardCanvas.getContext('2d');
+
+        // API 配置元素
+        const apiConfigSelect = document.getElementById('api-config-select');
+        const apiConfigNameInput = document.getElementById('api-config-name');
+        const apiUrlInput = document.getElementById('api-url');
+        const apiKeyInput = document.getElementById('api-key');
+        const apiModelsListInput = document.getElementById('api-models-list');
+        const saveApiConfigBtn = document.getElementById('save-api-config-btn');
+        const addApiConfigBtn = document.getElementById('add-api-config-btn');
+        const deleteApiConfigBtn = document.getElementById('delete-api-config-btn');
+        const toggleApiConfigBtn = document.getElementById('toggle-api-config');
+        const apiConfigContent = document.getElementById('api-config-content');
+
+        // 游戏设置元素
+        const apiModelSelect = document.getElementById('api-model');
+        const useImageCheckbox = document.getElementById('use-image');
+        const temperatureInput = document.getElementById('temperature');
+        const maxTokensInput = document.getElementById('max-tokens');
+        const moveWrapperInput = document.getElementById('move-wrapper');
+        const saveGameSettingsBtn = document.getElementById('save-game-settings-btn');
+        const toggleGameSettingsBtn = document.getElementById('toggle-game-settings');
+        const gameSettingsContent = document.getElementById('game-settings-content');
+
+        // 日志元素
+        const showRawAiResponseCheckbox = document.getElementById('show-raw-ai-response');
+        const toggleLogPanelBtn = document.getElementById('toggle-log-panel');
+        const logPanelContent = document.getElementById('log-panel-content');
+        const clearLogBtn = document.getElementById('clear-log-btn'); // 添加 - 清除日志按钮
+
+
+        // --- 游戏状态 ---
+        const BOARD_SIZE = 15; // 棋盘大小 (15x15)
+        let board = []; // 棋盘状态数组: 0: 空, 1: 玩家 (黑棋), 2: AI (白棋) - 或者根据 aiStarts 切换
+        let humanPlayer = 1; // 人类玩家棋子类型 (默认黑棋 1)
+        let aiPlayer = 2;     // AI 玩家棋子类型 (默认白棋 2)
+        let currentPlayer = 1; // 当前轮到谁下棋
+        let gameOver = false; // 游戏是否结束
+        let aiIsThinking = false; // AI 是否正在思考
+        let aiCanRetry = false; // 标志位，指示 AI 是否可以重试 (仅在 AI 失败时设置为 true)
+
+        // --- 设置 ---
+        let apiConfigs = []; // API 配置数组 { name: string, url: string, key: string, models: string[] }
+        let selectedConfigName = ''; // 当前选中的 API 配置名称
+        let gameSettings = { // 游戏相关设置
+            selectedModel: '', // 从当前配置的模型列表中选择的模型
+            useImage: false, // 是否使用图像模式
+            temperature: 0.1, // 温度 (默认值修改)
+            maxTokens: 60000, // 最大 Token 数 (默认值修改)
+            moveWrapper: 'AI_MOVE:[row],[col]', // AI 回复落子位置的格式包装器
+            showRawResponse: false, // 是否在日志中显示 AI 原始回复
+            retryAttempts: 3, // triggerAIMove 调用中 API 错误的最多重试次数
+            retryDelay: 1500 // API 调用重试之间的延迟 (毫秒)
+        };
+
+        // --- 初始化 ---
+        function initGame(aiStarts = false) {
+            // 初始化棋盘数组，所有位置设为 0 (空)
+            board = Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0));
+            gameOver = false; // 重置游戏结束状态
+            aiIsThinking = false; // 重置 AI 思考状态
+            aiCanRetry = false; // 新游戏时重置重试标志
+            aiRetryBtn.disabled = true; // 新游戏时禁用重试按钮
+
+            if (aiStarts) {
+                humanPlayer = 2; // 人类执白
+                aiPlayer = 1;    // AI 执黑
+                currentPlayer = aiPlayer; // AI 先行
+                updateStatus("新游戏：AI 先行 (黑棋)");
+                logMessage("新游戏开始！AI 使用黑棋先行。", "info");
+                disableBoardInteraction(); // 禁用棋盘交互
+                disableGameButtons(); // 禁用新游戏按钮
+                 setTimeout(triggerAIMove, 500); // 稍作延迟后触发 AI 行动
+            } else {
+                humanPlayer = 1; // 人类执黑
+                aiPlayer = 2;    // AI 执白
+                currentPlayer = humanPlayer; // 玩家先行
+                updateStatus("新游戏：玩家先行 (黑棋)");
+                logMessage("新游戏开始！玩家使用黑棋先行。", "info");
+                enableBoardInteraction(); // 启用棋盘交互
+                enableGameButtons(); // 启用新游戏按钮
+            }
+            drawBoard(); // 绘制棋盘（在设置玩家和标签后）
+            drawLabels(); // 绘制行列标签
+        }
+
+        // 绘制棋盘的行列标签 (A-O, 0-14)
+        function drawLabels() {
+            boardLabelsTop.innerHTML = ''; // 清空顶部标签
+            boardLabelsLeft.innerHTML = ''; // 清空左侧标签
+            // 列标签 (A-O) - 与日志和 AI 提示保持一致
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                const label = document.createElement('span');
+                label.textContent = String.fromCharCode(65 + c); // A, B, C...O
+                boardLabelsTop.appendChild(label);
+            }
+            // 行标签 (0-14) - 与日志和 AI 提示保持一致
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                const label = document.createElement('span');
+                label.textContent = r; // 0, 1, 2...14
+                boardLabelsLeft.appendChild(label);
+            }
+        }
+
+        // 绘制游戏棋盘
+        function drawBoard() {
+            boardElement.innerHTML = ''; // 清空棋盘内容
+            // 如果需要，可以动态设置 CSS 变量 (已在 CSS 中设置)
+            // boardElement.style.setProperty('--board-size', BOARD_SIZE);
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = r; // 存储行号 (0-14)
+                    cell.dataset.col = c; // 存储列号 (0-14)
+
+                    if (board[r][c] !== 0) { // 如果格子非空
+                        cell.classList.add('occupied'); // 标记为已占用
+                        const piece = document.createElement('div');
+                        piece.classList.add('piece');
+                        // 使用 1 代表黑棋, 2 代表白棋
+                        piece.classList.add(board[r][c] === 1 ? 'black' : 'white');
+                        cell.appendChild(piece);
+                    } else if (!gameOver && currentPlayer === humanPlayer && !aiIsThinking) {
+                        // 仅当轮到玩家、游戏未结束、AI 未思考时，为空格子添加点击监听器
+                        cell.addEventListener('click', handleCellClick);
+                    }
+                    boardElement.appendChild(cell);
+                }
+            }
+             // 确保控件反映当前状态
+             updateControlStates();
+        }
+
+        // --- 游戏逻辑 ---
+        // 处理玩家点击棋盘格子的事件
+        function handleCellClick(event) {
+            // 如果游戏结束、AI 正在思考或不是玩家的回合，则忽略点击
+            if (gameOver || aiIsThinking || currentPlayer !== humanPlayer) return;
+
+            const cell = event.target.closest('.cell'); // 获取被点击的 cell 元素
+            // 如果点击的不是 cell 或 cell 已被占用，则忽略
+            if (!cell || cell.classList.contains('occupied')) return;
+
+            const row = parseInt(cell.dataset.row); // 获取行号
+            const col = parseInt(cell.dataset.col); // 获取列号
+
+            // 再次检查格子是否为空 (虽然 classList 检查通常足够)
+            if (board[row][col] === 0) {
+                // 玩家成功落子。
+                // 任何之前的 AI 失败状态现在都无关紧要，禁用重试。
+                aiCanRetry = false;
+                // 放置棋子并继续
+                placePiece(row, col, humanPlayer);
+                // 玩家落子后立即更新控件状态 (禁用重试按钮)
+                updateControlStates();
+            }
+        }
+
+        // 在指定位置放置棋子
+        function placePiece(row, col, player) {
+            // 基本验证：游戏是否结束，坐标是否越界，位置是否为空
+            if (gameOver || row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE || board[row][col] !== 0) {
+                return false; // 无效移动
+            }
+
+            board[row][col] = player; // 更新棋盘状态数组
+            const pieceColor = player === 1 ? '黑棋' : '白棋'; // 获取棋子颜色
+            const playerType = player === humanPlayer ? '玩家' : 'AI'; // 获取玩家类型
+            // 使用两种坐标系记录日志以便清晰查看
+            logMessage(`${playerType} (${pieceColor}) 落子于 [${row}, ${col}] (坐标 ${String.fromCharCode(65 + col)}${row})`, "info");
+
+            // 重新绘制整个棋盘以正确更新视觉效果和监听器
+            // 这会隐式地移除新占用单元格的监听器
+            drawBoard(); // drawBoard 会调用 updateControlStates
+
+            // 检查当前玩家是否获胜
+            if (checkWin(row, col, player)) {
+                gameOver = true; // 标记游戏结束
+                const winner = player === humanPlayer ? "恭喜你，你赢了！🎉" : "AI 获胜！🤖";
+                updateStatus(winner); // 更新状态显示
+                logMessage(`游戏结束：${winner}`, "success"); // 记录日志
+                aiCanRetry = false; // 游戏结束后不能重试
+                disableBoardInteraction(); // 禁用棋盘交互
+                disableGameButtons(); // 保持新游戏按钮禁用，直到明确启用
+                aiRetryBtn.disabled = true; // 确保游戏结束时禁用重试
+                return true;
+            }
+
+            // 检查是否平局
+            if (checkDraw()) {
+                gameOver = true; // 标记游戏结束
+                updateStatus("平局！🤝"); // 更新状态显示
+                logMessage("游戏结束：平局！", "warning"); // 记录日志
+                aiCanRetry = false; // 游戏结束后不能重试
+                disableBoardInteraction(); // 禁用棋盘交互
+                disableGameButtons(); // 禁用游戏按钮
+                aiRetryBtn.disabled = true; // 确保游戏结束时禁用重试
+                return true;
+            }
+
+            // 如果游戏未结束，则切换玩家
+            if (!gameOver) {
+                switchPlayer();
+            }
+            return true; // 落子成功
+        }
+
+        // 切换当前玩家
+        function switchPlayer() {
+            currentPlayer = (currentPlayer === humanPlayer) ? aiPlayer : humanPlayer; // 切换玩家
+            const currentPieceColor = currentPlayer === 1 ? '黑棋' : '白棋'; // 获取当前玩家棋子颜色
+
+            if (currentPlayer === aiPlayer) { // 如果轮到 AI
+                updateStatus(`AI (${currentPieceColor}) 思考中...`); // 更新状态
+                aiIsThinking = true; // 标记 AI 正在思考
+                aiCanRetry = false; // AI 开始回合时重置重试可能性
+                disableBoardInteraction(); // 禁用棋盘交互
+                disableGameButtons(); // 禁用游戏按钮
+                aiRetryBtn.disabled = true; // AI 思考时禁用重试
+                setTimeout(triggerAIMove, 300); // 短暂延迟后调用 AI
+            } else { // 如果轮到人类玩家
+                // AI 移动后成功切换到人类玩家
+                updateStatus(`轮到你了 (${currentPieceColor})`); // 更新状态
+                aiIsThinking = false; // 确保重置思考标志
+                // aiCanRetry 在这里保持 false (仅在 AI 失败时通过 handleInvalidAIMove 设置为 true)
+                enableBoardInteraction(); // 为人类启用控件
+                enableGameButtons(); // 启用游戏按钮
+                // 重新绘制棋盘，将点击监听器加回空格子
+                drawBoard(); // drawBoard 调用 updateControlStates，后者处理重试按钮
+            }
+        }
+
+        // 检查指定位置落子后是否获胜
+        function checkWin(row, col, player) {
+            // 检查水平、垂直和两个对角线方向
+            const directions = [
+                { dr: 0, dc: 1 }, // 水平
+                { dr: 1, dc: 0 }, // 垂直
+                { dr: 1, dc: 1 }, // 主对角线
+                { dr: 1, dc: -1 } // 副对角线
+            ];
+            for (const { dr, dc } of directions) {
+                let count = 1; // 计算刚下的棋子
+                // 检查正方向
+                for (let i = 1; i < 5; i++) {
+                    const nr = row + i * dr;
+                    const nc = col + i * dc;
+                    if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && board[nr][nc] === player) {
+                        count++;
+                    } else {
+                        break; // 遇到边界或不同棋子则停止
+                    }
+                }
+                // 检查负方向
+                for (let i = 1; i < 5; i++) {
+                    const nr = row - i * dr;
+                    const nc = col - i * dc;
+                    if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && board[nr][nc] === player) {
+                        count++;
+                    } else {
+                        break; // 遇到边界或不同棋子则停止
+                    }
+                }
+                if (count >= 5) return true; // 如果连子数达到 5 或以上，返回 true
+            }
+            return false; // 所有方向检查完毕，未获胜
+        }
+
+        // 检查是否平局 (棋盘是否已满)
+        function checkDraw() {
+            // 检查棋盘上是否所有格子都非空
+            return board.every(row => row.every(cell => cell !== 0));
+        }
+
+        // 更新状态显示区域的文本
+        function updateStatus(message) {
+            statusArea.textContent = message;
+        }
+
+        // --- 控制状态管理 ---
+        // 禁用棋盘交互
+        function disableBoardInteraction() {
+             boardElement.style.cursor = 'not-allowed'; // 设置鼠标样式为不允许
+             // 通过重新绘制而不添加监听器来移除监听器
+             // 注意: drawBoard() 的逻辑会处理只在适当时候添加监听器
+        }
+
+        // 启用棋盘交互
+        function enableBoardInteraction() {
+            // 仅当轮到人类玩家且游戏未结束时启用
+            if (!gameOver && currentPlayer === humanPlayer && !aiIsThinking) {
+                boardElement.style.cursor = 'pointer'; // 为可点击单元格重置光标
+                // 通过重新绘制来添加点击监听器 (drawBoard 处理向空格子添加监听器)
+            } else {
+                 boardElement.style.cursor = 'not-allowed'; // 否则设置为不允许
+            }
+        }
+
+        // 禁用游戏控制按钮 (新游戏, AI 先行)
+        function disableGameButtons() {
+            newGameBtn.disabled = true;
+            aiFirstBtn.disabled = true;
+        }
+
+        // 启用游戏控制按钮
+        function enableGameButtons() {
+            // 仅当 AI 没有在活动时启用
+             if (!aiIsThinking) {
+                 newGameBtn.disabled = false;
+                 aiFirstBtn.disabled = false;
+             }
+        }
+
+        // 根据游戏状态集中更新所有控件状态的函数
+        function updateControlStates() {
+            const isHumanTurn = !gameOver && currentPlayer === humanPlayer && !aiIsThinking; // 是否轮到人类
+            const canRetry = aiCanRetry && !gameOver && !aiIsThinking; // 是否可以重试 (必须标志为 true 且游戏未结束 AI 未思考)
+
+            // 棋盘交互
+            if (isHumanTurn) {
+                enableBoardInteraction();
+            } else {
+                disableBoardInteraction();
+            }
+
+            // 游戏按钮 (新游戏 / AI 先行)
+            if (aiIsThinking || gameOver) { // 如果 AI 思考中或游戏结束，则禁用
+                 disableGameButtons();
+            } else { // 仅当游戏空闲时启用 (玩家回合或准备重试)
+                 enableGameButtons();
+            }
+
+            // AI 重试按钮
+            aiRetryBtn.disabled = !canRetry; // 根据 canRetry 状态设置
+
+            // 如果需要，记录状态以供调试
+            // console.log(`updateControlStates: gameOver=${gameOver}, currentPlayer=${currentPlayer}, aiIsThinking=${aiIsThinking}, aiCanRetry=${aiCanRetry} => isHumanTurn=${isHumanTurn}, canRetry=${canRetry}, retryBtnDisabled=${aiRetryBtn.disabled}`);
+        }
+
+
+        // --- AI 逻辑 ---
+        // 触发 AI 行动
+        async function triggerAIMove() {
+            // 在 AI 尝试开始时确保标志设置正确
+            aiIsThinking = true;
+            aiCanRetry = false; // 最初假设本次尝试会成功
+            updateControlStates(); // 更新 UI (禁用重试等)
+
+            const activeConfig = apiConfigs.find(c => c.name === selectedConfigName); // 获取当前激活的 API 配置
+            if (!activeConfig || !gameSettings.selectedModel) { // 检查配置和模型是否有效
+                logMessage("错误：未选择有效的 API 配置或模型。", "error");
+                handleInvalidAIMove("配置错误"); // 传递原因，启用重试
+                return;
+            }
+            // 检查 URL 和 Key 是否已填写
+            if (!activeConfig.url || !activeConfig.key) {
+                logMessage("错误：当前 API 配置缺少 URL 或 API Key。", "error");
+                handleInvalidAIMove("配置不完整"); // 传递原因，启用重试
+                return;
+            }
+
+            logMessage(`准备向 AI (${gameSettings.selectedModel}) 发送请求...`, "api");
+            let boardStateRepresentation; // 棋盘状态表示 (文本或图像提示)
+            let requestBody; // API 请求体
+            const aiPieceSymbol = aiPlayer === 1 ? 'X' : 'O'; // AI 棋子符号 ('X' 黑, 'O' 白)
+            const humanPieceSymbol = humanPlayer === 1 ? 'X' : 'O'; // 人类棋子符号
+
+            try {
+                // 1. 准备请求体
+                let userMessageContent = []; // 用户消息内容数组 (支持多模态)
+                if (gameSettings.useImage) { // 如果使用图像模式
+                    const imageDataUrl = generateBoardImage(); // 生成棋盘图像的 Base64 URL
+                    if (!imageDataUrl) {
+                         logMessage("错误：无法生成棋盘图像，将使用文本模式。", "error");
+                         // 如果图像生成失败，回退到文本模式
+                         boardStateRepresentation = getBoardStateText(humanPieceSymbol, aiPieceSymbol);
+                         userMessageContent.push({ type: "text", text: getAIPrompt(boardStateRepresentation, aiPieceSymbol) });
+                    } else {
+                         logMessage("棋盘图像已生成 (Base64)。", "api");
+                         boardStateRepresentation = "Board state is in the image"; // 图像模式下的占位文本
+                         userMessageContent.push({ type: "text", text: getAIPrompt(boardStateRepresentation, aiPieceSymbol) });
+                         userMessageContent.push({
+                             type: "image_url",
+                             image_url: { url: imageDataUrl, detail: "low" } // 使用低细节图像
+                         });
+                    }
+                } else { // 如果使用文本模式
+                    boardStateRepresentation = getBoardStateText(humanPieceSymbol, aiPieceSymbol); // 获取棋盘文本表示
+                    userMessageContent.push({ type: "text", text: getAIPrompt(boardStateRepresentation, aiPieceSymbol) });
+                }
+
+                // 构建 API 请求体 (遵循 OpenAI Chat Completions 格式)
+                requestBody = {
+                    model: gameSettings.selectedModel,
+                    messages: [
+                        { role: "system", content: getSystemPrompt(aiPieceSymbol) }, // 系统提示
+                        { role: "user", content: userMessageContent } // 用户消息 (可能包含文本和图像)
+                    ],
+                    temperature: gameSettings.temperature,
+                    max_tokens: gameSettings.maxTokens,
+                };
+
+                // 2. 调用 AI (包含针对 API 错误的内部重试逻辑)
+                // 如果 callAIWithRetry 在所有尝试后失败，它会抛出错误，在下面的 catch 块中捕获
+                const aiResponse = await callAIWithRetry(activeConfig.url, activeConfig.key, requestBody);
+
+                // 3. 处理成功的 API 响应
+                if (!aiResponse || !aiResponse.choices || aiResponse.choices.length === 0 || !aiResponse.choices[0].message || !aiResponse.choices[0].message.content) {
+                     logMessage("错误：AI 返回了无效或空的回复结构。", "error");
+                     handleInvalidAIMove("回复无效"); // 启用重试
+                     return; // 停止处理
+                }
+
+                const aiRawText = aiResponse.choices[0].message.content; // 获取 AI 回复的原始文本
+                logMessage(`AI 原始回复: \n${aiRawText}`, "ai-resp", true); // 记录原始回复，标记为 raw AI response
+
+                // 4. 解析 AI 的移动指令
+                const move = parseAIMove(aiRawText); // 从回复文本中解析坐标
+                if (!move) { // 如果解析失败
+                    logMessage("错误：无法从 AI 回复中解析出有效的落子位置。", "error");
+                    handleInvalidAIMove("解析失败"); // 启用重试
+                    return; // 停止处理
+                }
+
+                // 5. 验证移动是否有效
+                const [row, col] = move; // 获取解析出的行列号
+                if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE || board[row][col] !== 0) { // 检查坐标是否越界或位置已被占用
+                    logMessage(`错误：AI 返回了无效或已占用的位置 [${row}, ${col}]。`, "error");
+                    handleInvalidAIMove("无效落子"); // 启用重试
+                    return; // 停止处理
+                }
+
+                // 6. 放置棋子 (成功!)
+                // 如果代码执行到这里，说明移动是有效的
+                aiIsThinking = false; // AI 成功完成思考
+                // aiCanRetry 保持 false (在函数开始时已重置)
+                placePiece(row, col, aiPlayer); // 放置 AI 棋子 (此函数会处理切换回玩家并更新控件)
+
+            } catch (error) { // 捕获错误
+                // 这个 catch 块处理:
+                // - 来自 callAIWithRetry 的错误 (例如，API 调用超过最大重试次数)
+                // - 请求体生成 / 图像生成过程中的错误
+                logMessage(`AI 处理失败: ${error.message}`, "error");
+                handleInvalidAIMove("请求错误"); // 启用重试
+            } finally {
+                 // 确保如果在调用 placePiece 之前发生错误或调用了 handleInvalidAIMove，
+                 // 则重置思考标志。handleInvalidAIMove 也会设置它。
+                 if (aiIsThinking) { // 只有在未调用 handleInvalidAIMove 但发生错误时才应为 true
+                     aiIsThinking = false;
+                     // 如果未调用 handleInvalidAIMove，意味着我们不打算启用重试。
+                     // 然而，到达这里通常意味着意外的错误状态。
+                     // 也许更安全的做法是将控制权交还给玩家而不进行重试？
+                     // 目前，handleInvalidAIMove 涵盖了预期的重试场景。
+                     updateControlStates(); // 更新 UI 以反映思考停止
+                 }
+                 // 如果 placePiece 成功调用，aiIsThinking 已为 false，
+                 // 并且控制权已切换给玩家，更新了控件。
+                 // 如果 handleInvalidAIMove 被调用，它会将 aiIsThinking 设置为 false 并更新控件。
+            }
+        }
+
+        // 处理所有 AI 未能做出有效移动的情况的中央处理器。
+        // 此函数启用 "AI 重试" 按钮。
+        function handleInvalidAIMove(reason) {
+            const currentPieceColor = humanPlayer === 1 ? '黑棋' : '白棋'; // 玩家的棋子颜色
+            updateStatus(`AI未能下棋 (${reason})。轮到你了 (${currentPieceColor})。可尝试[AI 重试]`);
+            logMessage(`AI未能提供有效落子 (${reason})。玩家可继续或点[AI 重试]。`, "warning");
+
+            aiIsThinking = false; // AI 停止思考 (由于失败)
+            aiCanRetry = true; // *** 设置标志以允许重试 ***
+            currentPlayer = humanPlayer; // 将回合交还给玩家
+
+            // 更新控件以反映新状态 (启用棋盘，启用重试按钮)
+            updateControlStates();
+            // 重新绘制棋盘以确保为玩家的回合正确设置点击监听器
+            drawBoard();
+        }
+
+        // 获取系统提示 (英文)
+        function getSystemPrompt(aiPieceSymbol) {
+            const humanPieceSymbol = aiPieceSymbol === 'X' ? 'O' : 'X';
+            // 添加坐标系解释 - 与视觉/内部表示一致
+            return `You are a Gomoku (Five in a Row) AI assistant.
+Board size: ${BOARD_SIZE}x${BOARD_SIZE}.
+Coordinate system: Row (0 to ${BOARD_SIZE - 1}, top to bottom), Column (0 to ${BOARD_SIZE - 1}, left to right). The board display uses letters A-O for columns (A=0, B=1, ..., O=14) and numbers 0-14 for rows.
+Your pieces: '${aiPieceSymbol}' (${aiPieceSymbol === 'X' ? 'Black' : 'White'}).
+Opponent's pieces: '${humanPieceSymbol}' (${humanPieceSymbol === 'X' ? 'Black' : 'White'}).
+Rules: The first player to get five or more of their pieces in a row (horizontally, vertically, or diagonally) wins.
+Task: Analyze the board state (text or image) and choose the best empty cell to place your piece. Consider both offense and defense.
+Output format: Your response MUST end with **only** your move decision in the following format: ${gameSettings.moveWrapper.replace('[row]', 'row_number').replace('[col]', 'column_number')}. The row and column numbers MUST be integers between 0 and ${BOARD_SIZE - 1}.
+Example: If you decide to play at row 7, column 8 (displayed as I7 on the board), your response must end with: ${gameSettings.moveWrapper.replace('[row]', '7').replace('[col]', '8')}
+**Absolutely do not** add any other text, explanation, or punctuation after the ${gameSettings.moveWrapper} tag.`;
+        }
+
+        // 获取给 AI 的用户提示 (英文)
+        function getAIPrompt(boardStateText, aiPieceSymbol) {
+             let prompt = `This is the current ${BOARD_SIZE}x${BOARD_SIZE} board state.\n`;
+             // 提醒 AI 它应该用于输出的坐标系
+             prompt += `Coordinate system: Row 0-${BOARD_SIZE - 1} (top to bottom), Column 0-${BOARD_SIZE - 1} (left to right).\n`;
+             if (!gameSettings.useImage) { // 如果是文本模式
+                 prompt += "Board representation: '.'=empty, 'X'=Black, 'O'=White\n";
+                 prompt += boardStateText + "\n";
+             } else { // 如果是图像模式
+                 prompt += "(Board state is in the provided image, which includes row/column labels A-O and 0-14)\n";
+             }
+             prompt += `You are playing as '${aiPieceSymbol}' (${aiPieceSymbol === 'X' ? 'Black' : 'White'}). It's your turn to move.\n`;
+             prompt += `Analyze the board and decide your best move (place one piece on an empty cell).\n`;
+             prompt += `Strictly follow the output format requirement. Tell me your chosen move (using 0-${BOARD_SIZE - 1} numbers for both row and column) at the **very end** of your response using this format: ${gameSettings.moveWrapper}`;
+             return prompt;
+        }
+
+        // 生成带有 A-O / 0-14 标签的文本表示，与视觉棋盘一致
+        function getBoardStateText(humanSymbol, aiSymbol) {
+            let text = "   "; // 列标签的填充
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                 text += String.fromCharCode(65 + c) + " "; // 列标签 A-O
+            }
+            text += "\n";
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                text += r.toString().padStart(2, ' ') + " "; // 行标签 0-14 (左侧补齐空格)
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] === 0) text += "."; // 空位
+                    // 使用玩家分配 (1=黑, 2=白) 来决定符号
+                    else if (board[r][c] === humanPlayer) text += humanSymbol; // 人类玩家棋子
+                    else text += aiSymbol; // AI 玩家棋子
+                    text += " "; // 棋子间空格
+                }
+                text += "\n"; // 每行结束后换行
+            }
+            return text.trim(); // 移除末尾多余的空白
+        }
+
+        // 生成带有 A-O / 0-14 标签绘制在其上的图像
+        function generateBoardImage() {
+            const cellSize = 30; // 固定大小以保证图像生成一致性
+            const pieceRadius = cellSize * 0.4; // 棋子半径
+            const labelSize = 20; // 图像中标签的空间
+            const boardDimension = BOARD_SIZE * cellSize; // 棋盘区域尺寸
+            const totalWidth = boardDimension + labelSize; // 画布总宽度
+            const totalHeight = boardDimension + labelSize; // 画布总高度
+            const boardOffsetX = labelSize; // 棋盘区域 X 轴偏移量
+            const boardOffsetY = labelSize; // 棋盘区域 Y 轴偏移量
+
+            boardCanvas.width = totalWidth; // 设置画布宽度
+            boardCanvas.height = totalHeight; // 设置画布高度
+
+            // 背景
+            ctx.fillStyle = '#f0f2f5'; // 匹配页面背景色
+            ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+            // 棋盘背景
+            ctx.fillStyle = '#F5DEB3'; // 木色背景
+            ctx.fillRect(boardOffsetX, boardOffsetY, boardDimension, boardDimension);
+
+            // 网格线
+            ctx.strokeStyle = '#aaa'; // 线条颜色
+            ctx.lineWidth = 1; // 线条宽度
+            const lineStart = cellSize / 2; // 第一个单元格的中心
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                // 垂直线
+                ctx.beginPath();
+                ctx.moveTo(boardOffsetX + lineStart + i * cellSize, boardOffsetY + lineStart);
+                ctx.lineTo(boardOffsetX + lineStart + i * cellSize, boardOffsetY + boardDimension - lineStart);
+                ctx.stroke();
+                // 水平线
+                ctx.beginPath();
+                ctx.moveTo(boardOffsetX + lineStart, boardOffsetY + lineStart + i * cellSize);
+                ctx.lineTo(boardOffsetX + boardDimension - lineStart, boardOffsetY + lineStart + i * cellSize);
+                ctx.stroke();
+            }
+
+            // 星位 (天元及其他 15x15 棋盘的星位)
+             const starPoints = [ [3, 3], [3, 11], [11, 3], [11, 11], [7, 7] ]; // 星位坐标 (row, col)
+             ctx.fillStyle = '#555'; // 深色点
+             starPoints.forEach(([r, c]) => {
+                 if (r < BOARD_SIZE && c < BOARD_SIZE) { // 确保坐标在棋盘内
+                     ctx.beginPath();
+                     // 计算星位中心点坐标
+                     ctx.arc(boardOffsetX + lineStart + c * cellSize, boardOffsetY + lineStart + r * cellSize, cellSize * 0.1, 0, Math.PI * 2);
+                     ctx.fill();
+                 }
+             });
+
+            // 标签 (在图像上绘制 - A-O / 0-14)
+            ctx.fillStyle = '#333'; // 标签颜色
+            ctx.font = `${labelSize * 0.6}px sans-serif`; // 标签字体大小
+            ctx.textAlign = 'center'; // 水平居中
+            ctx.textBaseline = 'middle'; // 垂直居中
+            // 列标签 (A-O)
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                ctx.fillText(String.fromCharCode(65 + c), boardOffsetX + lineStart + c * cellSize, boardOffsetY - labelSize / 2);
+            }
+            // 行标签 (0-14)
+            ctx.textAlign = 'right'; // 行号右对齐
+            ctx.textBaseline = 'middle';
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                ctx.fillText(r, boardOffsetX - labelSize / 3, boardOffsetY + lineStart + r * cellSize);
+            }
+
+            // 棋子
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] !== 0) { // 如果该位置有棋子
+                        const centerX = boardOffsetX + lineStart + c * cellSize; // 棋子中心 X 坐标
+                        const centerY = boardOffsetY + lineStart + r * cellSize; // 棋子中心 Y 坐标
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, pieceRadius, 0, Math.PI * 2); // 绘制圆形
+
+                        const isBlack = board[r][c] === 1; // 1 代表黑棋
+                        // 计算渐变中心点，模拟光照效果
+                        const gradX = isBlack ? centerX - pieceRadius * 0.3 : centerX + pieceRadius * 0.3;
+                        const gradY = isBlack ? centerY - pieceRadius * 0.3 : centerY + pieceRadius * 0.3;
+                        const gradColor0 = isBlack ? '#555' : '#fff'; // 渐变起始色 (高光)
+                        const gradColor1 = isBlack ? '#000' : '#ccc'; // 渐变结束色 (主体)
+
+                        // 创建放射状渐变
+                        const gradient = ctx.createRadialGradient(gradX, gradY, pieceRadius * 0.1, centerX, centerY, pieceRadius);
+                        gradient.addColorStop(0, gradColor0);
+                        gradient.addColorStop(1, gradColor1);
+
+                        ctx.fillStyle = gradient; // 应用渐变填充
+                        ctx.fill();
+
+                        // 添加细微边框使棋子更清晰
+                        ctx.strokeStyle = isBlack ? '#222' : '#bbb'; // 边框颜色
+                        ctx.lineWidth = 0.5; // 边框宽度
+                        ctx.stroke();
+                    }
+                }
+            }
+            try { return boardCanvas.toDataURL('image/png'); } // 尝试将 Canvas 转换为 PNG Data URL
+            catch (e) { console.error("Canvas toDataURL error:", e); logMessage("生成棋盘图像失败 (Canvas Error)", "error"); return null; } // 捕获并记录错误
+        }
+
+        // 处理 API 调用，仅对网络/服务器错误进行重试
+        async function callAIWithRetry(apiUrl, apiKey, requestBody, attempt = 1) {
+            logMessage(`[API] 第 ${attempt} 次尝试调用 ${requestBody.model}...`, "api");
+            const currentPieceColor = aiPlayer === 1 ? '黑棋' : '白棋';
+            // 仅当 AI 仍标记为思考中时更新状态 (可能已被新游戏取消)
+            if (aiIsThinking) {
+                updateStatus(`AI (${currentPieceColor}) 思考中... (API 尝试 ${attempt}/${gameSettings.retryAttempts})`);
+            }
+
+            try {
+                const response = await fetch(apiUrl, { // 发起 fetch 请求
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, // 设置请求头
+                    body: JSON.stringify(requestBody) // 发送 JSON 格式的请求体
+                });
+
+                if (!response.ok) { // 如果响应状态码不是 2xx
+                    let errorBodyText = await response.text(); // 先读取文本格式的错误响应体
+                    let errorJson = null;
+                    try { errorJson = JSON.parse(errorBodyText); } catch (e) { /* 如果不是 JSON 则忽略 */ }
+                    // 构建详细的错误消息
+                    const errorMsg = `API 请求失败: ${response.status} ${response.statusText}. ${errorJson ? `详情: ${JSON.stringify(errorJson)}` : `响应: ${errorBodyText}`}`;
+                    throw new Error(errorMsg); // 抛出错误以触发重试或最终失败
+                }
+
+                const data = await response.json(); // 解析成功的 JSON 响应
+                logMessage("[API] 请求成功！", "success");
+                return data; // 返回成功的数据
+
+            } catch (error) { // 捕获 fetch 或响应处理中的错误
+                logMessage(`[API] 第 ${attempt} 次请求失败: ${error.message}`, "error");
+                if (attempt < gameSettings.retryAttempts) { // 如果还没达到最大重试次数
+                    logMessage(`将在 ${gameSettings.retryDelay / 1000} 秒后重试...`, "warning");
+                    await new Promise(resolve => setTimeout(resolve, gameSettings.retryDelay)); // 等待指定延迟
+                    // 检查等待期间游戏状态是否已改变 (例如，开始了新游戏)
+                    if (!aiIsThinking || gameOver) {
+                        logMessage("[API] 重试被取消 (游戏状态已改变)。", "warning");
+                        throw new Error("AI API 重试被取消"); // 抛出特定错误以停止重试
+                    }
+                    // 递归调用进行重试
+                    return callAIWithRetry(apiUrl, apiKey, requestBody, attempt + 1);
+                } else { // 如果已达到最大重试次数
+                    logMessage("[API] 请求达到最大重试次数，放弃。", "error");
+                    // 在最大重试次数后重新抛出最终错误，将被 triggerAIMove 捕获
+                    throw new Error(`API 请求失败 (已达最大重试次数): ${error.message}`);
+                }
+            }
+        }
+
+        // 解析 AI 响应，期望格式为基于 moveWrapper 的 "[row],[col]"
+        function parseAIMove(responseText) {
+            // 对用户定义的包装器中的特殊字符进行转义以用于正则表达式
+            const escapedWrapper = gameSettings.moveWrapper
+                .replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') // 转义正则表达式特殊字符
+                .replace('\\\[row\\\]', '\\s*(\\d+)\\s*')   // 匹配行号 (0-14, 允许前后有空格)
+                .replace('\\\[col\\\]', '\\s*(\\d+)\\s*');  // 匹配列号 (0-14, 允许前后有空格)
+
+            // 正则表达式，用于严格在字符串末尾查找包装器 (可能在空白之后)
+            // 'm' 标志允许 '$' 匹配行尾 (如果 responseText 有多行)
+            // 'i' 标志使匹配不区分大小写 (虽然包装器通常是固定的，但增加鲁棒性)
+            const regex = new RegExp(escapedWrapper + '\\s*$', 'im');
+            const match = responseText.match(regex); // 尝试匹配
+
+            if (match && match[1] && match[2]) { // 如果匹配成功且捕获到两个数字
+                const row = parseInt(match[1]);
+                const col = parseInt(match[2]);
+                // 基本的范围健全性检查 (更具体的检查在 triggerAIMove 中完成)
+                if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+                    logMessage(`[解析] 成功解析 AI 落子: [${row}, ${col}] (使用格式: ${gameSettings.moveWrapper})`, "success");
+                    return [row, col]; // 返回解析出的坐标数组
+                } else {
+                     logMessage(`[解析] 找到格式 ${gameSettings.moveWrapper} 但坐标 [${row}, ${col}] 超出范围 (0-${BOARD_SIZE-1})。`, "error");
+                     return null; // 坐标范围无效
+                }
+            } else {
+                // 备用方案: 尝试在末尾查找简单的 [row, col] 或 (row, col) 格式
+                const fallbackRegex = /[\[\(]\s*(\d+)\s*,\s*(\d+)\s*[\]\)]\s*$/m;
+                const fallbackMatch = responseText.match(fallbackRegex);
+                 if (fallbackMatch && fallbackMatch[1] && fallbackMatch[2]) { // 如果备用匹配成功
+                     const row = parseInt(fallbackMatch[1]);
+                     const col = parseInt(fallbackMatch[2]);
+                     if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) { // 检查范围
+                         logMessage(`[解析] 使用备用格式 [row,col] 或 (row,col) 解析 AI 落子: [${row}, ${col}]`, "warning");
+                         return [row, col]; // 返回备用解析结果
+                     } else {
+                         logMessage(`[解析] 找到备用格式但坐标 [${row}, ${col}] 超出范围 (0-${BOARD_SIZE-1})。`, "error");
+                         return null; // 备用格式坐标范围无效
+                     }
+                 }
+                 // 如果主要格式和备用格式都解析失败
+                 logMessage(`[解析] 无法使用格式 "${gameSettings.moveWrapper}" 或备用格式 "[row,col]"/"(row,col)" 在回复末尾解析出有效的 0-${BOARD_SIZE-1} 坐标。原始回复见日志。`, "error");
+                return null; // 解析完全失败
+            }
+        }
+
+        // --- 设置管理 ---
+
+        // 加载设置 (API 配置和游戏设置)
+        function loadSettings() {
+            // 加载 API 配置
+            const storedConfigs = localStorage.getItem('gomoku_apiConfigs_v1'); // 使用 v1 key
+            if (storedConfigs) {
+                try { apiConfigs = JSON.parse(storedConfigs); if (!Array.isArray(apiConfigs)) apiConfigs = []; }
+                catch (e) { console.error("解析存储的 API 配置时出错:", e); apiConfigs = []; }
+            }
+            if (apiConfigs.length === 0) {
+                // 如果没有存储的配置，添加一个空的占位符，提示用户填写
+                apiConfigs.push({ name: "请编辑此配置", url: "", key: "", models: [] }); // 默认 URL/Key 为空，模型列表为空
+                // 不再自动保存这个空的占位符，让用户明确添加和保存
+                // localStorage.setItem('gomoku_apiConfigs_v1', JSON.stringify(apiConfigs));
+            }
+
+            // 加载上次选中的配置名称
+            selectedConfigName = localStorage.getItem('gomoku_selectedConfigName_v1') || apiConfigs[0]?.name || ''; // 使用 v1 key
+            // 确保选中的配置确实存在
+            if (!apiConfigs.some(c => c.name === selectedConfigName)) {
+                selectedConfigName = apiConfigs[0]?.name || ''; // 如果不存在，则选择第一个
+                localStorage.setItem('gomoku_selectedConfigName_v1', selectedConfigName); // 更新存储
+            }
+
+            // 加载游戏设置
+            gameSettings.selectedModel = localStorage.getItem('gomoku_selectedModel_v1') || ''; // 使用 v1 key
+            gameSettings.useImage = localStorage.getItem('gomoku_useImage_v1') === 'true'; // 使用 v1 key
+            // 使用 gameSettings 中的默认值作为 fallback
+            gameSettings.temperature = parseFloat(localStorage.getItem('gomoku_temperature_v1') || gameSettings.temperature); // 使用 v1 key
+            gameSettings.maxTokens = parseInt(localStorage.getItem('gomoku_maxTokens_v1') || gameSettings.maxTokens); // 使用 v1 key
+            gameSettings.moveWrapper = localStorage.getItem('gomoku_moveWrapper_v1') || gameSettings.moveWrapper; // 使用 v1 key
+            gameSettings.showRawResponse = localStorage.getItem('gomoku_showRawResponse_v1') === 'true'; // 使用 v1 key
+
+            // 根据加载的设置更新 UI
+            populateApiConfigSelect(); // 填充 API 配置下拉列表
+            displaySelectedConfig(); // 显示选定配置的详细信息并填充模型选择列表
+            updateGameSettingsUI(); // 设置游戏设置 UI 元素 (温度、Token 等)
+            updateLogAreaVisibility(); // 设置日志可见性
+
+            logMessage("设置已加载。", "info");
+        }
+
+        // 保存 API 配置到 localStorage
+        function saveApiConfigs() {
+             localStorage.setItem('gomoku_apiConfigs_v1', JSON.stringify(apiConfigs)); // 使用 v1 key
+             localStorage.setItem('gomoku_selectedConfigName_v1', selectedConfigName); // 使用 v1 key
+             logMessage("API 配置已保存到 localStorage。", "success");
+        }
+
+        // 保存游戏设置到 localStorage
+        function saveGameSettings() {
+            // 从 UI 读取设置值
+            gameSettings.selectedModel = apiModelSelect.value;
+            gameSettings.useImage = useImageCheckbox.checked;
+            gameSettings.temperature = parseFloat(temperatureInput.value);
+            gameSettings.maxTokens = parseInt(maxTokensInput.value);
+            gameSettings.moveWrapper = moveWrapperInput.value.trim(); // 去除前后空格
+            gameSettings.showRawResponse = showRawAiResponseCheckbox.checked;
+
+            // 验证 moveWrapper - 必须包含 '[row]' 和 '[col]' 字面量
+             if (!gameSettings.moveWrapper || !gameSettings.moveWrapper.includes('[row]') || !gameSettings.moveWrapper.includes('[col]')) {
+                 alert("错误：落子标记必须包含 '[row]' 和 '[col]' 这两个占位符。");
+                 logMessage("错误：落子标记格式无效，未保存游戏设置。", "error");
+                 // 恢复 UI 到上次保存的状态可能比较复杂，这里仅不保存
+                 // updateGameSettingsUI(); // 恢复 UI (可选)
+                 return; // 阻止保存
+             }
+
+            // 保存到 localStorage (使用 v1 key)
+            localStorage.setItem('gomoku_selectedModel_v1', gameSettings.selectedModel);
+            localStorage.setItem('gomoku_useImage_v1', gameSettings.useImage);
+            localStorage.setItem('gomoku_temperature_v1', gameSettings.temperature);
+            localStorage.setItem('gomoku_maxTokens_v1', gameSettings.maxTokens);
+            localStorage.setItem('gomoku_moveWrapper_v1', gameSettings.moveWrapper);
+            localStorage.setItem('gomoku_showRawResponse_v1', gameSettings.showRawResponse);
+
+            updateLogAreaVisibility(); // 立即更新日志可见性
+            logMessage("游戏设置已保存！", "success");
+        }
+
+        // --- UI 更新函数 ---
+
+        // 填充 API 配置选择下拉列表
+        function populateApiConfigSelect() {
+            apiConfigSelect.innerHTML = ''; // 清空现有选项
+            apiConfigs.forEach(config => {
+                const option = document.createElement('option');
+                option.value = config.name;
+                option.textContent = config.name;
+                if (config.name === selectedConfigName) {
+                    option.selected = true; // 选中当前配置
+                }
+                apiConfigSelect.appendChild(option);
+            });
+        }
+
+        // 显示当前选定 API 配置的详细信息
+        function displaySelectedConfig() {
+            const config = apiConfigs.find(c => c.name === selectedConfigName); // 查找选中的配置对象
+            if (config) { // 如果找到配置
+                apiConfigNameInput.value = config.name; // 显示名称
+                apiUrlInput.value = config.url; // 显示 URL
+                apiKeyInput.value = config.key; // 显示 Key (密码框)
+                apiModelsListInput.value = config.models.join(', '); // 显示模型列表 (逗号分隔)
+                populateModelSelect(config.models); // 根据此配置的模型列表填充模型选择下拉框
+            } else { // 如果选中的配置不存在 (例如，删除后)
+                apiConfigNameInput.value = '';
+                apiUrlInput.value = '';
+                apiKeyInput.value = '';
+                apiModelsListInput.value = '';
+                populateModelSelect([]); // 清空模型列表
+                if (apiConfigs.length > 0) { // 如果还有其他配置，则选择第一个
+                    selectedConfigName = apiConfigs[0].name;
+                    apiConfigSelect.value = selectedConfigName; // 更新下拉框选择
+                    displaySelectedConfig(); // 使用第一个配置重新运行此函数
+                } else {
+                    // 如果连一个配置都没有了，确保模型下拉框是空的
+                     populateModelSelect([]);
+                }
+            }
+        }
+
+        // 填充游戏设置中的模型选择下拉列表
+        function populateModelSelect(models) {
+            apiModelSelect.innerHTML = ''; // 清空现有选项
+            if (!models || models.length === 0) { // 如果没有模型或列表为空
+                 const option = document.createElement('option');
+                 option.value = "";
+                 option.textContent = "请先在API配置中添加并保存模型"; // 提示信息
+                 option.disabled = true; // 禁用此选项
+                 option.selected = true; // 默认选中
+                 apiModelSelect.appendChild(option);
+                 gameSettings.selectedModel = ''; // 没有模型被选中
+                 return;
+            }
+
+            let foundSavedModel = false; // 标记是否找到了上次保存的模型
+            models.forEach(modelName => { // 遍历模型名称列表
+                if (!modelName) return; // 跳过空模型名称
+                const option = document.createElement('option');
+                option.value = modelName;
+                option.textContent = modelName;
+                // 根据当前保存的游戏设置选择模型
+                if (modelName === gameSettings.selectedModel) {
+                    option.selected = true;
+                    foundSavedModel = true; // 标记已找到
+                }
+                apiModelSelect.appendChild(option);
+            });
+
+             // 如果上次保存的模型不在此配置的列表中，或者没有保存过模型，则选择第一个有效的模型
+             if (!foundSavedModel && apiModelSelect.options.length > 0 && apiModelSelect.options[0].value) {
+                 apiModelSelect.selectedIndex = 0; // 选择第一个选项
+                 gameSettings.selectedModel = apiModelSelect.value; // 更新设置状态以匹配 UI
+             } else if (apiModelSelect.options.length === 0 || !apiModelSelect.options[0].value) {
+                 // 此情况由初始检查处理，但作为防御性措施：
+                 gameSettings.selectedModel = ''; // 没有可用的模型
+             }
+             // 如果 foundSavedModel 为 true，则 gameSettings.selectedModel 已经是正确的。
+        }
+
+        // 更新游戏设置相关的 UI 元素
+        function updateGameSettingsUI() {
+            // 根据 gameSettings 对象更新 UI 元素的值
+            useImageCheckbox.checked = gameSettings.useImage;
+            temperatureInput.value = gameSettings.temperature;
+            maxTokensInput.value = gameSettings.maxTokens;
+            moveWrapperInput.value = gameSettings.moveWrapper;
+            showRawAiResponseCheckbox.checked = gameSettings.showRawResponse;
+
+             // 确保在下拉列表中选中正确的模型
+             // 这可能在 populateModelSelect 之后运行，因此需要确保一致性
+             const modelExistsInCurrentList = [...apiModelSelect.options].some(opt => opt.value === gameSettings.selectedModel);
+
+             if (gameSettings.selectedModel && modelExistsInCurrentList) {
+                 // 如果保存的模型在当前列表中存在，则选中它
+                 apiModelSelect.value = gameSettings.selectedModel;
+             } else if (apiModelSelect.options.length > 0 && apiModelSelect.options[0].value) {
+                 // 如果保存的模型对于当前配置无效/缺失，则选择第一个有效选项
+                 apiModelSelect.selectedIndex = 0;
+                 // 让 saveGameSettings 处理设置状态的更新
+                 // gameSettings.selectedModel = apiModelSelect.value;
+             } else {
+                  // 没有有效的模型被选中或可用
+                  // 让 saveGameSettings 处理设置状态的更新
+                  // gameSettings.selectedModel = '';
+             }
+        }
+
+        // 更新日志区域 AI 原始回复的可见性
+        function updateLogAreaVisibility() {
+            if (gameSettings.showRawResponse) { // 如果设置了显示原始回复
+                logArea.classList.add('show-raw-ai'); // 添加 CSS 类以显示
+            } else {
+                logArea.classList.remove('show-raw-ai'); // 移除 CSS 类以隐藏
+            }
+        }
+
+        // --- 日志工具 ---
+        // 在日志区域添加一条消息
+        function logMessage(message, type = 'info', isRawAI = false) {
+            const logEntry = document.createElement('p'); // 创建 p 元素
+            logEntry.classList.add(`log-${type}`); // 添加类型对应的 CSS 类 (log-info, log-error 等)
+            if (isRawAI) { // 如果是原始 AI 回复
+                logEntry.classList.add('log-ai-resp'); // 添加特定类以控制可见性
+            }
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); // 获取当前时间
+            // 使用 textContent 以确保安全，除非明确需要 HTML 且已进行清理
+            logEntry.textContent = `[${time}] ${message}`; // 设置文本内容
+            logArea.appendChild(logEntry); // 添加到日志区域
+            logArea.scrollTop = logArea.scrollHeight; // 自动滚动到底部
+        }
+
+        // --- 事件监听器 ---
+        newGameBtn.addEventListener('click', () => initGame(false)); // 新游戏 (玩家先手)
+        aiFirstBtn.addEventListener('click', () => initGame(true)); // 新游戏 (AI 先手)
+        saveGameSettingsBtn.addEventListener('click', saveGameSettings); // 保存游戏设置
+
+        // "显示 AI 原始回复" 复选框变化监听
+        showRawAiResponseCheckbox.addEventListener('change', () => {
+            gameSettings.showRawResponse = showRawAiResponseCheckbox.checked; // 更新设置状态
+            localStorage.setItem('gomoku_showRawResponse_v1', gameSettings.showRawResponse); // 立即保存到 localStorage (使用 v1 key)
+            updateLogAreaVisibility(); // 更新日志可见性
+        });
+
+        // 清除日志按钮监听
+        clearLogBtn.addEventListener('click', () => { // 添加
+            logArea.innerHTML = ''; // 清空日志区域内容
+            logMessage("日志已清除。", "info"); // 添加一条清除日志的消息
+        });
+
+        // AI 重试按钮监听
+        aiRetryBtn.addEventListener('click', () => {
+            // 再次检查条件：必须允许重试，游戏未结束，AI 未在思考
+            if (!aiCanRetry || gameOver || aiIsThinking) {
+                 console.warn("重试按钮被点击，但条件不满足。");
+                 return;
+            }
+
+            logMessage("玩家触发 AI 重试...", "warning");
+            aiCanRetry = false; // 消耗掉这次重试机会
+            currentPlayer = aiPlayer; // 将回合设置回 AI
+            const currentPieceColor = aiPlayer === 1 ? '黑棋' : '白棋';
+            updateStatus(`AI (${currentPieceColor}) 重试中...`); // 更新状态
+            aiIsThinking = true; // 设置思考标志
+            updateControlStates(); // 禁用棋盘、禁用重试按钮等
+            setTimeout(triggerAIMove, 100); // 快速触发 AI 重试
+        });
+
+
+        // API 配置监听器
+        // API 配置选择下拉框变化监听
+        apiConfigSelect.addEventListener('change', (e) => {
+            selectedConfigName = e.target.value; // 更新选中的配置名称
+            localStorage.setItem('gomoku_selectedConfigName_v1', selectedConfigName); // 保存到 localStorage (使用 v1 key)
+            displaySelectedConfig(); // 更新 UI 字段和模型列表
+            updateGameSettingsUI(); // 重新同步游戏设置 UI (特别是模型选择)
+            logMessage(`已切换到 API 配置: ${selectedConfigName}`, "info");
+        });
+
+        // 添加新 API 配置按钮监听
+        addApiConfigBtn.addEventListener('click', () => {
+            const newName = apiConfigNameInput.value.trim(); // 获取新名称
+            const newUrl = apiUrlInput.value.trim(); // 获取新 URL
+            const newKey = apiKeyInput.value.trim(); // 获取新 Key
+            const newModelsRaw = apiModelsListInput.value.trim(); // 获取原始模型列表字符串
+            // 分割、去除空格并过滤掉空字符串，得到模型数组
+            const newModels = newModelsRaw ? newModelsRaw.split(',').map(m => m.trim()).filter(m => m) : [];
+
+            if (!newName || !newUrl /*|| !newKey*/) { // 名称和 URL 是必需的，Key 可能对某些 API 是可选的？让用户决定。
+                 alert("错误：新配置的名称和 URL 不能为空。");
+                 return;
+            }
+            if (apiConfigs.some(c => c.name === newName)) { // 检查名称是否已存在
+                 alert(`错误：配置名称 "${newName}" 已存在。`);
+                 return;
+            }
+
+            const newConfig = { name: newName, url: newUrl, key: newKey, models: newModels }; // 创建新配置对象
+            apiConfigs.push(newConfig); // 添加到配置数组
+            selectedConfigName = newName; // 选中新添加的配置
+
+            saveApiConfigs(); // 保存所有配置，包括新的
+            populateApiConfigSelect(); // 更新下拉列表 (将选中新的)
+            displaySelectedConfig(); // 显示新配置的详细信息并更新模型列表
+            updateGameSettingsUI(); // 同步游戏设置 UI
+            logMessage(`已添加新 API 配置: ${newName}`, "success");
+        });
+
+        // 保存对选中 API 配置的更改按钮监听
+        saveApiConfigBtn.addEventListener('click', () => {
+            const targetName = apiConfigSelect.value; // 正在编辑的配置名称 (来自下拉列表)
+            const editedName = apiConfigNameInput.value.trim(); // 输入框中的新名称
+            const editedUrl = apiUrlInput.value.trim(); // 编辑后的 URL
+            const editedKey = apiKeyInput.value.trim(); // 编辑后的 Key
+            const editedModelsRaw = apiModelsListInput.value.trim(); // 编辑后的原始模型列表
+            const editedModels = editedModelsRaw ? editedModelsRaw.split(',').map(m => m.trim()).filter(m => m) : []; // 编辑后的模型数组
+
+            if (!editedName || !editedUrl /*|| !editedKey*/) { // 名称和 URL 不能为空
+                 alert("错误：配置名称和 URL 不能为空。");
+                 return;
+            }
+
+            const configIndex = apiConfigs.findIndex(c => c.name === targetName); // 查找要编辑的配置的索引
+            if (configIndex === -1) { // 如果找不到
+                 alert("错误：找不到要编辑的配置。请从下拉列表中选择一个配置。");
+                 return;
+            }
+            // 检查 *新* 名称是否与 *另一个* 现有配置冲突
+            if (editedName !== targetName && apiConfigs.some(c => c.name === editedName)) {
+                 alert(`错误：配置名称 "${editedName}" 已被其他配置使用。`);
+                 return;
+            }
+
+            // 更新数组中的配置对象
+            apiConfigs[configIndex] = { name: editedName, url: editedUrl, key: editedKey, models: editedModels };
+            selectedConfigName = editedName; // 更新选中的名称，以防名称被更改
+
+            saveApiConfigs(); // 保存更新后的数组
+            populateApiConfigSelect(); // 更新下拉列表 (反映可能的名称更改和选择)
+            displaySelectedConfig(); // 显示更新后的详细信息并更新模型列表
+            updateGameSettingsUI(); // 同步游戏设置 UI
+            logMessage(`已更新 API 配置: ${editedName}`, "success");
+        });
+
+        // 删除选中 API 配置按钮监听
+        deleteApiConfigBtn.addEventListener('click', () => {
+            if (apiConfigs.length <= 1) { // 如果只剩一个配置
+                 alert("错误：不能删除唯一的 API 配置。请先添加一个新配置。");
+                 return;
+            }
+            const targetName = apiConfigSelect.value; // 获取要删除的配置名称
+            if (!targetName) { // 如果没有选中任何配置
+                 alert("请先从下拉列表中选择一个要删除的配置。");
+                 return;
+            }
+
+            if (confirm(`确定要删除配置 "${targetName}" 吗？此操作无法撤销。`)) { // 确认删除
+                apiConfigs = apiConfigs.filter(c => c.name !== targetName); // 从数组中过滤掉该配置
+                // 选择剩余的第一个配置
+                selectedConfigName = apiConfigs[0]?.name || '';
+
+                saveApiConfigs(); // 保存修改后的数组和新的选择
+                populateApiConfigSelect(); // 更新下拉列表
+                displaySelectedConfig(); // 显示新选中的配置
+                updateGameSettingsUI(); // 同步游戏设置 UI
+                logMessage(`已删除 API 配置: ${targetName}`, "success");
+            }
+        });
+
+        // 面板切换功能
+        const setupPanelToggle = (buttonId, contentId) => {
+            const button = document.getElementById(buttonId); // 获取按钮元素
+            const content = document.getElementById(contentId); // 获取内容元素
+            if (!button || !content) { // 检查元素是否存在
+                console.warn(`切换设置失败: 未找到按钮 '${buttonId}' 或内容 '${contentId}'。`);
+                return;
+            }
+            // 根据初始显示样式设置按钮文本 (可选，假设默认为 block)
+            const isInitiallyHidden = content.style.display === 'none';
+            button.textContent = isInitiallyHidden ? '(+)' : '(-)';
+
+            // 添加点击事件监听器
+            button.addEventListener('click', () => {
+                const isHidden = content.style.display === 'none'; // 检查当前是否隐藏
+                content.style.display = isHidden ? 'block' : 'none'; // 切换显示状态
+                button.textContent = isHidden ? '(-)' : '(+)'; // 更新按钮文本
+            });
+        };
+        // 设置各个面板的切换按钮
+        setupPanelToggle('toggle-api-config', 'api-config-content');
+        setupPanelToggle('toggle-game-settings', 'game-settings-content');
+        setupPanelToggle('toggle-log-panel', 'log-panel-content');
+
+
+        // --- 初始加载 ---
+        loadSettings(); // 页面加载时加载保存的设置
+        initGame();     // 初始化游戏棋盘 (默认玩家先手)
+
+    </script>
+</body>
+</html>
