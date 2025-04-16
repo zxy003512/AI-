@@ -8,11 +8,11 @@
   ],
   "routes": [
     {
-      "src": "/ai_move",      
-      "dest": "/api/index.py"  
+      "src": "/ai_move",
+      "dest": "/api/index.py"
     },
     {
-      "src": "/(.*)",          
+      "src": "/(.*)",           
       "dest": "/index.html"    
     }
   ]
