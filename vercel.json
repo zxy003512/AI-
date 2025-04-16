@@ -1,19 +1,19 @@
 {
-    "version": 2,
-    "builds": [
-      {
-        "src": "/api/gomoku_ai_server.py", 
-        "use": "@vercel/python"          
-      }
-    ],
-    "routes": [
-      {
-         "src": "/ai_move",                 
-         "dest": "/api/gomoku_ai_server.py" 
-      },
-      {
-         "src": "/(.*)",                    
-         "dest": "/index.html"           
-      }
-    ]
-  }
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/ai_move",      
+      "dest": "/api/index.py"  
+    },
+    {
+      "src": "/(.*)",          
+      "dest": "/index.html"    
+    }
+  ]
+}
