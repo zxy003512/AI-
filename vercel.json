@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "gomoku_ai_server.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaDuration": 60
+      }
     },
     {
       "src": "index.html",
@@ -19,10 +22,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "functions": {
-    "gomoku_ai_server.py": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }
