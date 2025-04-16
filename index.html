@@ -46,7 +46,7 @@ let board = Array.from({length:size}, ()=>Array(size).fill(0)); // 0:空, 1:玩�
 let gameOver = false;
 let playerTurn = true; // true: 玩家回合, false: AI回合
 let currentDepth = 3; // Default search depth, matches "普通" radio button value
-const AI_BACKEND_URL = 'http://127.0.0.1:5000/ai_move'; // Adjust if your server runs elsewhere
+const AI_BACKEND_URL = 'https://ai-gomoku-m77zg7769-zyun43141gmailcoms-projects.vercel.app/ai_move'; // Adjust if your server runs elsewhere
 
 // --- 绘制相关 (Keep as is) ---
 function drawBoard() {
