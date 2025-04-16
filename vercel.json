@@ -2,23 +2,22 @@
   "version": 2,
   "builds": [
     {
-      "src": "/api/gomoku_ai_server.py", 
-      "use": "@vercel/python",          
-      "config": {
-        "maxLambdaSize": "50mb",       
-         "runtime": "python3.9"       
-      }
+      "src": "gomoku_ai_server.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
-      "src": "/api/gomoku_ai_server",   
-      "dest": "/api/gomoku_ai_server.py" 
+      "src": "/ai_move",
+      "dest": "gomoku_ai_server.py"
     },
     {
-       "src": "/(.*)",                 
-       "dest": "/index.html"          
-       
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }

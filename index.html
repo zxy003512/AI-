@@ -46,7 +46,10 @@ let board = Array.from({length:size}, ()=>Array(size).fill(0)); // 0:空, 1:玩�
 let gameOver = false;
 let playerTurn = true; // true: 玩家回合, false: AI回合
 let currentDepth = 3; // Default search depth, matches "普通" radio button value
-const AI_BACKEND_URL = '/api/gomoku_ai_server'; // Adjust if your server runs elsewhere
+// --- 修改开始 ---
+// const AI_BACKEND_URL = 'http://127.0.0.1:5000/ai_move'; // 本地开发URL
+const AI_BACKEND_URL = '/ai_move'; // Vercel部署使用的相对路径
+// --- 修改结束 ---
 
 // --- 绘制相关 (Keep as is) ---
 function drawBoard() {
@@ -134,7 +137,7 @@ async function requestAiMove() {
 
     console.log("Requesting AI move from backend...");
     try {
-        const response = await fetch(AI_BACKEND_URL, {
+        const response = await fetch(AI_BACKEND_URL, { // URL is now relative
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -150,6 +153,7 @@ async function requestAiMove() {
             // Decide game state: end game or allow player retry? Here maybe end it.
             // gameOver = true; // Option 1: End game on error
             playerTurn = true; // Option 2: Give turn back to player? Risky.
+            setStatus("发生错误，请重试或刷新"); // Reset status without thinking indicator
             return;
         }
 
@@ -159,6 +163,8 @@ async function requestAiMove() {
              console.error("Backend returned an error:", data.error);
              setStatus(`AI 错误: ${data.error} 😭`);
              // gameOver = true;
+             setStatus("AI 内部错误，请重试或刷新"); // Reset status without thinking indicator
+             playerTurn = true; // Give turn back
              return;
         }
 
@@ -171,6 +177,8 @@ async function requestAiMove() {
                  console.error(`Backend returned invalid move: (${x}, ${y}). Current board cell: ${board[y]?.[x]}`);
                 setStatus("AI 返回了无效的移动! 🤯");
                 // gameOver = true; // Probably end game
+                setStatus("AI 移动无效，请重试或刷新"); // Reset status without thinking indicator
+                playerTurn = true; // Give turn back
                 return;
              }
 
@@ -197,6 +205,8 @@ async function requestAiMove() {
         } else {
             console.error("Invalid response format from backend:", data);
             setStatus("AI响应格式错误! 😵");
+            setStatus("AI 响应错误，请重试或刷新"); // Reset status without thinking indicator
+            playerTurn = true; // Give turn back
             // gameOver = true;
         }
 
@@ -205,7 +215,8 @@ async function requestAiMove() {
         setStatus("无法连接到AI服务器! 🔌");
         // Handle network error - maybe revert turn? Or indicate connection lost
         // playerTurn = true; // Give turn back?
-        // setStatus("连接错误，请重试或检查服务器");
+        setStatus("网络错误，请检查连接或刷新"); // Reset status without thinking indicator
+        playerTurn = true; // Give turn back
     }
 }
 
@@ -267,8 +278,6 @@ function aiFirst() {
 drawBoard(); // Initial draw
 // Ensure the default checked difficulty matches currentDepth
 document.querySelector(`input[name="difficulty"][value="${currentDepth}"]`).checked = true;
-
-
 </script>
 </body>
 </html>
