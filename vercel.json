@@ -1,10 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "gomoku_ai_server.py": {
-      "maxDuration": 60
-    }
-  },
   "builds": [
     {
       "src": "gomoku_ai_server.py",
@@ -24,5 +19,10 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "gomoku_ai_server.py": {
+      "maxDuration": 60
+    }
+  }
 }
